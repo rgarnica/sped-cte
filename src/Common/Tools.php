@@ -240,7 +240,7 @@ class Tools
      */
     public function model($model = null)
     {
-        if ($model == 57) {
+        if ($model == 57 || $model == 67) {
             $this->modelo = $model;
         }
         return $this->modelo;
