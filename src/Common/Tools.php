@@ -327,7 +327,14 @@ class Tools
         $dom->formatOutput = false;
         $dom->loadXML($signed);
         //exception will be throw if CTe is not valid
-        $this->isValid($this->versao, $signed, 'cte');
+
+        if ($this->modelo == 67) {
+            $method = 'cteOS';
+        } else {
+            $method = 'cte';
+        }
+
+        $this->isValid($this->versao, $signed, $method);
         return $signed;
     }
     

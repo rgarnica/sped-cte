@@ -47,7 +47,13 @@ class Tools extends ToolsCommon
         if (!is_array($aXml)) {
             throw new \InvalidArgumentException('Os XML das CTe devem ser passados em um array.');
         }
-        $servico = 'CteRecepcao';
+
+        if ($this->modelo == 67) {
+            $servico = 'CteRecepcaoOS';
+        } else {
+            $servico = 'CteRecepcao';
+        }
+    
         $this->checkContingencyForWebServices($servico);
         if ($this->contingency->type != '') {
             //em modo de contingencia
