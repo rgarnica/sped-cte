@@ -48,7 +48,7 @@ class Tools extends ToolsCommon
             throw new \InvalidArgumentException('Os XML das CTe devem ser passados em um array.');
         }
 
-        if ($this->modelo == '67') {
+        if ($this->modelo == 67) {
             $servico = 'CteRecepcaoOS';
         } else {
             $servico = 'CteRecepcao';

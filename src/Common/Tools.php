@@ -328,7 +328,7 @@ class Tools
         $dom->loadXML($signed);
         //exception will be throw if CTe is not valid
 
-        if ($this->modelo == '67') {
+        if ($this->modelo == 67) {
             $method = 'cteOS';
         } else {
             $method = 'cte';
