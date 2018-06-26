@@ -48,11 +48,7 @@ class Tools extends ToolsCommon
             throw new \InvalidArgumentException('Os XML das CTe devem ser passados em um array.');
         }
 
-        if ($this->modelo == 67) {
-            $servico = 'CteRecepcaoOS';
-        } else {
-            $servico = 'CteRecepcao';
-        }
+        $servico = 'CteRecepcao';
     
         $this->checkContingencyForWebServices($servico);
         if ($this->contingency->type != '') {
@@ -91,6 +87,37 @@ class Tools extends ToolsCommon
             $parameters = ['cteDadosMsgZip' => $gzdata];
             $body = "<cteDadosMsgZip xmlns=\"$this->urlNamespace\">$gzdata</cteDadosMsgZip>";
         }
+        $this->lastResponse = $this->sendRequest($body, $parameters);
+        return $this->lastResponse;
+    }
+
+    /**
+     * Request authorization to issue CTe OS with one document
+     * @param array $aXml array of cte's xml
+     * @param string $idLote lote number
+     * @param bool $compactar flag to compress data with gzip
+     * @return string soap response xml
+     */
+    public function sefazEnviaOS($xml) {
+
+        $servico = 'CteRecepcaoOS';
+      
+    
+        $sxml = preg_replace("/<\?xml.*?\?>/", "", $xml);
+        $this->servico(
+            $servico,
+            $this->config->siglaUF,
+            $this->tpAmb
+        );
+        
+        $request = $sxml;
+
+        $this->isValid($this->urlVersion, $request, 'cteOS');
+        $this->lastRequest = $request;
+        //montagem dos dados da mensagem SOAP
+        $parameters = ['cteDadosMsg' => $request];
+        $body = "<cteDadosMsg xmlns=\"$this->urlNamespace\">$request</cteDadosMsg>";
+        $method = $this->urlMethod;
         $this->lastResponse = $this->sendRequest($body, $parameters);
         return $this->lastResponse;
     }
