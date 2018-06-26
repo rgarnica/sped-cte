@@ -42,6 +42,7 @@ class Standardize
     public $rootTagList = [
         'enviCTe',
         'retEnviCte',
+        'retCTeOS',
         'retConsReciCTe',
         'consSitCTe',
         'retConsSitCTe',
@@ -53,7 +54,8 @@ class Standardize
         'inutCTe',
         'retInutCTe',
         'procInutCTe',
-        'CTe'
+        'CTe',
+        'CTeOS'
     ];
     
     /**
