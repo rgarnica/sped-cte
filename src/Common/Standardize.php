@@ -50,12 +50,14 @@ class Standardize
         'retConsStatServCte',
         'eventoCTe',
         'retEventoCTe',
+        'cteRecepcaoOSResult',
         'evCancCTe',
         'inutCTe',
         'retInutCTe',
         'procInutCTe',
         'CTe',
-        'CTeOS'
+        'CTeOS',
+        'retConsStatServCte'
     ];
     
     /**

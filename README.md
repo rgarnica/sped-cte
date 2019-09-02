@@ -1,4 +1,4 @@
-# SPED-CTE v4.0 (em desenvolvimento)
+# SPED-CTE v4.0
 
 [![Chat][ico-gitter]][link-gitter]
 
@@ -76,6 +76,7 @@ Caso você encontre algum problema relativo a segurança, por favor envie um ema
 
 ## Credits
 
+- Cleiton Perin (Owner)
 - Roberto L. Machado (Owner)
 - Samuel Basso (Mantenedor)
 - Gleidson Brito (Colaborador)

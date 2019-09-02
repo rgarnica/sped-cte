@@ -58,7 +58,7 @@ class Tools extends ToolsCommon
             //pois serão alterados
             foreach ($aXml as $doc) {
                 //corrigir o xml para o tipo de contigência setado
-                $xmls[] = $this->correctNFeForContingencyMode($doc);
+                $xmls[] = $this->correctCTeForContingencyMode($doc);
             }
             $aXml = $xmls;
         }
@@ -88,6 +88,29 @@ class Tools extends ToolsCommon
             $body = "<cteDadosMsgZip xmlns=\"$this->urlNamespace\">$gzdata</cteDadosMsgZip>";
         }
         $this->lastResponse = $this->sendRequest($body, $parameters);
+        return $this->lastResponse;
+    }
+    
+    /**
+     * Request authorization to issue CTe OS with one document only
+     * @param type $xml
+     * @return type
+     */
+    public function sefazEnviaCTeOS($xml)
+    {
+        //carrega serviço
+        $servico = 'CteRecepcaoOS';
+        $this->checkContingencyForWebServices($servico);
+        $this->servico(
+            $servico,
+            $this->config->siglaUF,
+            $this->tpAmb
+        );
+        $request = preg_replace("/<\?xml.*\?>/", "", $xml);
+        $this->isValid($this->urlVersion, $request, 'cteOS');
+        $this->lastRequest = $request;
+        $body = "<cteDadosMsg xmlns=\"$this->urlNamespace\">$request</cteDadosMsg>";
+        $this->lastResponse = $this->sendRequest($body);
         return $this->lastResponse;
     }
 
@@ -372,7 +395,7 @@ class Tools extends ToolsCommon
         $this->servico(
             $servico,
             $fonte,
-            1,
+            $this->tpAmb,
             true
         );
         $cUF = UFList::getCodeByUF($this->config->siglaUF);
@@ -384,7 +407,7 @@ class Tools extends ToolsCommon
         }
         //monta a consulta
         $consulta = "<distDFeInt xmlns=\"$this->urlPortal\" versao=\"$this->urlVersion\">"
-            . "<tpAmb>1</tpAmb>"
+            . "<tpAmb>".$this->tpAmb."</tpAmb>"
             . "<cUFAutor>$cUF</cUFAutor>"
             . "<CNPJ>".$this->config->cnpj."</CNPJ>$tagNSU</distDFeInt>";
         //valida o xml da requisição
@@ -540,15 +563,20 @@ class Tools extends ToolsCommon
         $chNFe,
         $tpEvento,
         $xJust = '',
-        $nSeqEvento = 1
+        $nSeqEvento = 1,
+        $ufEvento = 'RS'
     ) {
         $tagAdic = '';
-        if ($tpEvento == 210240) {
+        if ($tpEvento == 610110) {
             $xJust = Strings::replaceSpecialsChars(substr(trim($xJust), 0, 255));
-            $tagAdic = "<xJust>$xJust</xJust>";
+            $tagAdic = "<evPrestDesacordo>"
+                . "<descEvento>Prestação do Serviço em Desacordo</descEvento>"
+                . "<indDesacordoOper>1</indDesacordoOper>"
+                . "<xObs>$xJust</xObs>"
+                . "</evPrestDesacordo>";
         }
         return $this->sefazEvento(
-            'AN',
+            $ufEvento,
             $chNFe,
             $tpEvento,
             $nSeqEvento,
@@ -569,7 +597,7 @@ class Tools extends ToolsCommon
         if ($this->contingency->type !== 'EPEC') {
             throw new \RuntimeException('A contingência EPEC deve estar ativada.');
         }
-        $xml = $this->correctNFeForContingencyMode($xml);
+        $xml = $this->correctCTeForContingencyMode($xml);
         $dom = new \DOMDocument('1.0', 'UTF-8');
         $dom->preserveWhiteSpace = false;
         $dom->formatOutput = false;
@@ -669,6 +697,7 @@ class Tools extends ToolsCommon
         $sSeqEvento = str_pad($nSeqEvento, 2, "0", STR_PAD_LEFT);
         $eventId = "ID".$tpEvento.$chave.$sSeqEvento;
         $cOrgao = UFList::getCodeByUF($uf);
+
         $request = "<eventoCTe xmlns=\"$this->urlPortal\" versao=\"$this->urlVersion\">"
             . "<infEvento Id=\"$eventId\">"
             . "<cOrgao>$cOrgao</cOrgao>"
@@ -683,6 +712,7 @@ class Tools extends ToolsCommon
             . "</detEvento>"
             . "</infEvento>"
             . "</eventoCTe>";
+
         //assinatura dos dados
         $request = Signer::sign(
             $this->certificate,
@@ -692,8 +722,8 @@ class Tools extends ToolsCommon
             $this->algorithm,
             $this->canonical
         );
-        $request = Strings::clearXmlString($request, true);
 
+        $request = Strings::clearXmlString($request, true);
         $this->isValid($this->urlVersion, $request, 'eventoCTe');
         $this->lastRequest = $request;
         $parameters = ['cteDadosMsg' => $request];
@@ -792,53 +822,138 @@ class Tools extends ToolsCommon
     }
 
     /**
-     * Checks the validity of an NFe, normally used for received NFe
+     * Checks the validity of an CTe, normally used for received CTe
      * @param  string $cte
      * @return boolean
      */
     public function sefazValidate($cte)
     {
-        //verifica a assinatura da NFe, exception caso de falha
-        Signer::isSigned($cte);
+        if (empty($cte)) {
+            throw new InvalidArgumentException('Validacao CT-e: a string do CT-e esta vazio!');
+        }
+        //verifica a assinatura do CTe, exception caso de falha
+        Signer::isSigned($cte, 'infCte');
         $dom = new \DOMDocument('1.0', 'utf-8');
         $dom->formatOutput = false;
         $dom->preserveWhiteSpace = false;
         $dom->loadXML($cte);
         //verifica a validade no webservice da SEFAZ
         $tpAmb = $dom->getElementsByTagName('tpAmb')->item(0)->nodeValue;
-        $infNFe  = $dom->getElementsByTagName('infNFe')->item(0);
-        $chNFe = preg_replace('/[^0-9]/', '', $infNFe->getAttribute("Id"));
+        $infCTe  = $dom->getElementsByTagName('infCte')->item(0);
+        $chCTe = preg_replace('/[^0-9]/', '', $infCTe->getAttribute("Id"));
         $protocol = $dom->getElementsByTagName('nProt')->item(0)->nodeValue;
         $digval = $dom->getElementsByTagName('DigestValue')->item(0)->nodeValue;
-        //consulta a NFe
-        $response = $this->sefazConsultaChave($chNFe, $tpAmb);
+        //consulta o CTe
+        $response = $this->sefazConsultaChave($chCTe, $tpAmb);
         $ret = new \DOMDocument('1.0', 'UTF-8');
         $ret->preserveWhiteSpace = false;
         $ret->formatOutput = false;
         $ret->loadXML($response);
-        $retProt = $ret->getElementsByTagName('protNFe')->item(0);
+        $retProt = $ret->getElementsByTagName('protCTe')->item(0);
         if (!isset($retProt)) {
-            throw new InvalidArgumentException(
-                'O documento de resposta não contêm o NODE "protNFe".'
-            );
+            $xMotivo = $ret->getElementsByTagName('xMotivo')->item(0);
+            if (isset($xMotivo)) {
+                throw new InvalidArgumentException('Validacao CT-e: ' . $xMotivo->nodeValue);
+            } else {
+                throw new InvalidArgumentException('O documento de resposta nao contem o node "protCTe".');
+            }
         }
         $infProt = $ret->getElementsByTagName('infProt')->item(0);
-        $cStat  = $infProt->getElementsByTagName('cStat')->item(0)->nodeValue;
-        $xMotivo = $infProt->getElementsByTagName('xMotivo')->item(0)->nodeValue;
         $dig = $infProt->getElementsByTagName("digVal")->item(0);
         $digProt = '000';
         if (isset($dig)) {
             $digProt = $dig->nodeValue;
         }
-        $chProt = $infProt->getElementsByTagName("chNFe")->item(0)->nodeValue;
+        $chProt = $infProt->getElementsByTagName("chCTe")->item(0)->nodeValue;
         $nProt = $infProt->getElementsByTagName("nProt")->item(0)->nodeValue;
-        if ($protocol == $nProt
-            && $digval == $digProt
-            && $chNFe == $chProt
-        ) {
+        if ($protocol == $nProt && $digval == $digProt && $chCTe == $chProt) {
             return true;
         }
         return false;
+    }
+
+    /**
+     * Requires CE
+     * @param  string $chave key of CTe
+     * @param  string $nProt Protocolo do CTe
+     * @param  string $xNome Nome de quem recebeu a entrega
+     * @param  string $nDoc  Documento de quem recebeu a entrega
+     * @param  string $hash  Hash da Chave de acesso do CT-e + Imagem da assinatura no formato Base64
+     * @param  int    $latitude  Latitude do ponto da entrega
+     * @param  int    $longitude  Longitude do ponto da entrega
+     * @param  int    $nSeqEvento No. sequencial do evento
+     * @param  string $dhEventoEntrega Data e hora da geração do hash da entrega
+     * @param  array  $aNFes Chave das NFes entregues
+     * @return string
+     */
+    public function sefazCE(
+        $chave,
+        $nProt,
+        $xNome,
+        $nDoc,
+        $hash,
+        $latitude,
+        $longitude,
+        $nSeqEvento,
+        $dhEventoEntrega,
+        $aNFes = []
+    ) {
+        $uf = $this->validKeyByUF($chave);
+        $tpEvento = 110180;
+        
+        /* relaciona as chaves das NFes */
+        $infEntrega = '';
+        foreach ($aNFes as $NFe) {
+            $infEntrega .= "<infEntrega>"
+                . "<chNFe>$NFe</chNFe>"
+                . "</infEntrega>";
+        }
+
+        $tagAdic = "<evCECTe>"
+            . "<descEvento>Comprovante de Entrega do CT-e</descEvento>"
+            . "<nProt>$nProt</nProt>"
+            . "<dhEntrega>$dhEventoEntrega</dhEntrega>"
+            . "<nDoc>$nDoc</nDoc>"
+            . "<xNome>$xNome</xNome>"
+            . "<latitude>$latitude</latitude>"
+            . "<longitude>$longitude</longitude>"
+            . "<hashEntrega>$hash</hashEntrega>"
+            . "<dhHashEntrega>$dhEventoEntrega</dhHashEntrega>"
+            . $infEntrega
+            . "</evCECTe>";
+        return $this->sefazEvento(
+            $uf,
+            $chave,
+            $tpEvento,
+            $nSeqEvento,
+            $tagAdic
+        );
+    }
+
+    /**
+     * Requires CE cancellation
+     * @param  string $chave key of CTe
+     * @param  string $nProt protocolo do CTe
+     * @param  string $nProtCE protocolo do CE
+     * @param  int    $nSeqEvento No. sequencial do evento
+     * @return string
+     */
+    public function sefazCancelaCE($chave, $nProt, $nProtCE, $nSeqEvento)
+    {
+        $uf = $this->validKeyByUF($chave);
+        $tpEvento = 110181;
+        $tagAdic = "<evCancCECTe>"
+            . "<descEvento>Cancelamento do Comprovante de Entrega do CT-e</descEvento>"
+            . "<nProt>$nProt</nProt>"
+            . "<nProtCE>$nProtCE</nProtCE>"
+            . "</evCancCECTe>";
+        return $this->sefazEvento(
+            $uf,
+            $chave,
+            $tpEvento,
+            $nSeqEvento,
+            $tagAdic
+        );
     }
 
     /**
@@ -863,46 +978,26 @@ class Tools extends ToolsCommon
                 $std->alias = 'CancCTe';
                 $std->desc = 'Cancelamento';
                 break;
-            case 110140:
+            case 110113:
                 //EPEC
                 //emissão em contingência EPEC
                 $std->alias = 'EPEC';
                 $std->desc = 'EPEC';
                 break;
-            case 111500:
-            case 111501:
-                //EPP
-                //Pedido de prorrogação
-                $std->alias = 'EPP';
-                $std->desc = 'Pedido de Prorrogacao';
+            case 110180:
+                //comprovante de entrega
+                $std->alias = 'evCECTe';
+                $std->desc = 'Comprovante de Entrega';
                 break;
-            case 111502:
-            case 111503:
-                //ECPP
-                //Cancelamento do Pedido de prorrogação
-                $std->alias = 'ECPP';
-                $std->desc = 'Cancelamento de Pedido de Prorrogacao';
+            case 110181:
+                //cancelamento do comprovante de entrega
+                $std->alias = 'evCancCECTe';
+                $std->desc = 'Cancelamento do Comprovante de Entrega';
                 break;
-            case 210200:
-                //Confirmacao da Operacao
-                $std->alias = 'EvConfirma';
-                $std->desc = 'Confirmacao da Operacao';
-                break;
-            case 210210:
-                //Ciencia da Operacao
-                $std->alias = 'EvCiencia';
-                $std->desc = 'Ciencia da Operacao';
-                $std->tpAutor = 2;
-                break;
-            case 210220:
-                //Desconhecimento da Operacao
-                $std->alias = 'EvDesconh';
-                $std->desc = 'Desconhecimento da Operacao';
-                break;
-            case 210240:
-                //Operacao não Realizada
-                $std->alias = 'EvNaoRealizada';
-                $std->desc = 'Operacao nao Realizada';
+            case 610110:
+                //Serviço em desacordo
+                $std->alias = 'EvPrestDesacordo';
+                $std->desc = 'Servico em desacordo';
                 break;
             default:
                 $msg = "O código do tipo de evento informado não corresponde a "
@@ -911,7 +1006,7 @@ class Tools extends ToolsCommon
         }
         return $std;
     }
-    
+
     private static function serializerCCe(array $infCorrecoes)
     {
         // Grupo de Informações de Correção
